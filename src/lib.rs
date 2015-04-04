@@ -25,7 +25,7 @@ filename: String
 }
 
 fn format_line<'a>(path: &'a str, hash: &'a str) -> String {
-        path.to_string() + " " + hash + "\n"
+        hash.to_string() + " " + path + "\n"
 }
 
 impl clone::Clone for DirEntry {
@@ -122,7 +122,8 @@ fn hashes_directory_with_a_nonempty_subdir() {
 
     hash(dir, "", &mut output).ok().unwrap();
 
-    assert_eq!(output.to_str(), format!("/{}/{} 2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c\n", subdir, file));
+    let hash = "2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c";
+    assert_eq!(output.to_str(), format_line(&format!("/{}/{}", subdir, file), hash));
 
     fs::remove_dir_all(dir).ok();
 }
@@ -142,27 +143,9 @@ fn hashes_directory_sorted_by_filename() {
 
     hash(dir, "", &mut output).ok().unwrap();
 
-    assert_eq!(output.to_str(), format!("/{} 2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c\n/{} 47a968f5324c4cb0225c65948e30b3681f348f6ed9d4b4d6968f870743a93ea1cb4597247868442431edb5e858942c95146e1f82704d37a6d3ab9515cab8fd0c\n", fileA, fileB));
-
-    fs::remove_dir_all(dir).ok();
-}
-
-#[test]
-fn hashes_directory_with_two_nonempty_files() {
-    let mut rng = rand::thread_rng();
-    let dir = &format!("test.{}", rng.gen::<i32>());
-    let file = "A";
-    let file2 = "B";
-    let mut output = Output {
-    buffer: vec![]
-    };
-    fs::create_dir(dir).ok();
-    fs::File::create(format!("{}/{}", dir, file)).ok().unwrap().write_all("testas".as_bytes()).ok();
-    fs::File::create(format!("{}/{}", dir, file2)).ok().unwrap().write_all("testas2".as_bytes()).ok();
-
-    hash(dir, "", &mut output).ok().unwrap();
-
-    assert_eq!(output.to_str(), format!("/{} 2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c\n/{} 47a968f5324c4cb0225c65948e30b3681f348f6ed9d4b4d6968f870743a93ea1cb4597247868442431edb5e858942c95146e1f82704d37a6d3ab9515cab8fd0c\n", file, file2));
+    let hashA = "2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c";
+    let hashB = "47a968f5324c4cb0225c65948e30b3681f348f6ed9d4b4d6968f870743a93ea1cb4597247868442431edb5e858942c95146e1f82704d37a6d3ab9515cab8fd0c";
+    assert_eq!(output.to_str(), format_line(&format!("/{}", fileA), hashA) + &format_line(&format!("/{}", fileB), hashB));
 
     fs::remove_dir_all(dir).ok();
 }
@@ -180,7 +163,8 @@ fn hashes_directory_with_one_nonempty_file() {
 
     hash(dir, "", &mut output).ok().unwrap();
 
-    assert_eq!(output.to_str(), format!("/{} 2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c\n", file));
+    let hash = "2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c";
+    assert_eq!(output.to_str(), format_line(&format!("/{}", file), hash));
 
     fs::remove_dir_all(dir).ok();
 }
@@ -198,7 +182,8 @@ fn hashes_directory_with_one_empty_file() {
 
     hash(dir, "", &mut output).ok().unwrap();
 
-    assert_eq!(output.to_str(), format!("/{} cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e\n", file));
+    let hash = "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e";
+    assert_eq!(output.to_str(), format_line(&format!("/{}", file), hash));
 
     fs::remove_dir_all(dir).ok();
 }
