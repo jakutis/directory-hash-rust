@@ -61,14 +61,14 @@ fn partial_cmp(& self, other: &DirEntry) -> Option<cmp::Ordering> {
 }
 
 impl DirEntry {
-fn fromDirEntry(dir: &str, entry: fs::DirEntry) -> DirEntry {
+fn from_dir_entry(dir: &str, entry: fs::DirEntry) -> DirEntry {
     let path = entry.path();
     DirEntry {dir: dir.to_string(), is_dir: path.is_dir(), filename: path.file_name().unwrap().to_str().unwrap().to_string()}
 }
 }
 
 fn read_dir<'_>(dir: &str, relative_dir: &str) -> lazysort::LazySortIterator<'_, DirEntry> {
-                        fs::read_dir(&format!("{}{}", dir, relative_dir)).ok().unwrap().map(|entry| DirEntry::fromDirEntry(relative_dir, entry.ok().unwrap())).sorted()
+                        fs::read_dir(&format!("{}{}", dir, relative_dir)).ok().unwrap().map(|entry| DirEntry::from_dir_entry(relative_dir, entry.ok().unwrap())).sorted()
 }
 
 pub fn hash(dir: &str, sink: &mut io::Write) -> io::Result<()> {
@@ -85,7 +85,7 @@ pub fn hash(dir: &str, sink: &mut io::Write) -> io::Result<()> {
             let mut bytes = vec![];
             fs::File::open(format!("{}{}", dir, relative_path)).ok().unwrap().read_to_end(&mut bytes).ok();
 
-            let mut hash_str = hash::hash(hash::Type::SHA512, &bytes)
+            let hash_str = hash::hash(hash::Type::SHA512, &bytes)
             .iter()
             .map(|byte| format!("{:02x}", byte))
             .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str);
@@ -165,20 +165,20 @@ fn hashes_directory_with_a_nonempty_subdir() {
 fn hashes_directory_sorted_by_filename() {
     let mut rng = rand::thread_rng();
     let dir = &format!("test.{}", rng.gen::<i32>());
-    let fileA = "A";
-    let fileB = "B";
+    let file_a = "A";
+    let file_b = "B";
     let mut output = Output {
     buffer: vec![]
     };
     fs::create_dir(dir).ok();
-    fs::File::create(format!("{}/{}", dir, fileA)).ok().unwrap().write_all("testas".as_bytes()).ok();
-    fs::File::create(format!("{}/{}", dir, fileB)).ok().unwrap().write_all("testas2".as_bytes()).ok();
+    fs::File::create(format!("{}/{}", dir, file_a)).ok().unwrap().write_all("testas".as_bytes()).ok();
+    fs::File::create(format!("{}/{}", dir, file_b)).ok().unwrap().write_all("testas2".as_bytes()).ok();
 
     hash(dir, &mut output).ok().unwrap();
 
     let hashA = "2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c";
     let hashB = "47a968f5324c4cb0225c65948e30b3681f348f6ed9d4b4d6968f870743a93ea1cb4597247868442431edb5e858942c95146e1f82704d37a6d3ab9515cab8fd0c";
-    assert_eq!(output.to_str(), format_line(&format!("/{}", fileA), hashA) + &format_line(&format!("/{}", fileB), hashB));
+    assert_eq!(output.to_str(), format_line(&format!("/{}", file_a), hashA) + &format_line(&format!("/{}", file_b), hashB));
 
     fs::remove_dir_all(dir).ok();
 }
