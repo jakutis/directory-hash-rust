@@ -71,8 +71,7 @@ fn read_dir<'_>(dir: &str, relative_dir: &str) -> lazysort::LazySortIterator<'_,
                         fs::read_dir(&format!("{}{}", dir, relative_dir)).ok().unwrap().map(|entry| DirEntry::from_dir_entry(relative_dir, entry.ok().unwrap())).sorted()
 }
 
-pub fn hash(dir: &str, sink: &mut io::Write) -> io::Result<()> {
-    let mut s = "".to_string();
+pub fn hash(dir: &str, sink: &mut io::Write) -> () {
     let mut queue: Vec<_> = read_dir(dir, "").collect();
     while !queue.is_empty() {
         let entry = queue.pop().unwrap();
@@ -90,11 +89,9 @@ pub fn hash(dir: &str, sink: &mut io::Write) -> io::Result<()> {
             .map(|byte| format!("{:02x}", byte))
             .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str);
 
-            s.push_str(&format_line(relative_path, &hash_str));
+            sink.write_all(format_line(relative_path, &hash_str).as_bytes()).ok().unwrap();
         }
     }
-
-    sink.write_all(s.as_bytes())
 }
 
 struct Output {
@@ -132,7 +129,7 @@ fn hashes_directory_with_a_nonempty_subdir_and_file() {
     fs::File::create(format!("{}/{}", dir, file1)).ok();
     fs::File::create(format!("{}/{}/{}", dir, subdir, file2)).ok();
 
-    hash(dir, &mut output).ok().unwrap();
+    hash(dir, &mut output);
 
     let hash = "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e";
     assert_eq!(output.to_str(), format_line(&format!("/{}/{}", subdir, file2), hash) + &format_line(&format!("/{}", file1), hash));
@@ -153,7 +150,7 @@ fn hashes_directory_with_a_nonempty_subdir() {
     fs::create_dir(format!("{}/{}", dir, subdir)).ok();
     fs::File::create(format!("{}/{}/{}", dir, subdir, file)).ok().unwrap().write_all("testas".as_bytes()).ok();
 
-    hash(dir, &mut output).ok().unwrap();
+    hash(dir, &mut output);
 
     let hash = "2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c";
     assert_eq!(output.to_str(), format_line(&format!("/{}/{}", subdir, file), hash));
@@ -174,7 +171,7 @@ fn hashes_directory_sorted_by_filename() {
     fs::File::create(format!("{}/{}", dir, file_a)).ok().unwrap().write_all("testas".as_bytes()).ok();
     fs::File::create(format!("{}/{}", dir, file_b)).ok().unwrap().write_all("testas2".as_bytes()).ok();
 
-    hash(dir, &mut output).ok().unwrap();
+    hash(dir, &mut output);
 
     let hashA = "2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c";
     let hashB = "47a968f5324c4cb0225c65948e30b3681f348f6ed9d4b4d6968f870743a93ea1cb4597247868442431edb5e858942c95146e1f82704d37a6d3ab9515cab8fd0c";
@@ -194,7 +191,7 @@ fn hashes_directory_with_one_nonempty_file() {
     fs::create_dir(dir).ok();
     fs::File::create(format!("{}/{}", dir, file)).ok().unwrap().write_all("testas".as_bytes()).ok();
 
-    hash(dir, &mut output).ok().unwrap();
+    hash(dir, &mut output);
 
     let hash = "2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c";
     assert_eq!(output.to_str(), format_line(&format!("/{}", file), hash));
@@ -213,7 +210,7 @@ fn hashes_directory_with_one_empty_file() {
     fs::create_dir(dir).ok();
     fs::File::create(format!("{}/{}", dir, file)).ok();
 
-    hash(dir, &mut output).ok().unwrap();
+    hash(dir, &mut output);
 
     let hash = "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e";
     assert_eq!(output.to_str(), format_line(&format!("/{}", file), hash));
@@ -230,7 +227,7 @@ fn hashes_empty_directory() {
     };
     fs::create_dir(dir).ok();
 
-    hash(dir, &mut output).ok().unwrap();
+    hash(dir, &mut output);
 
     assert_eq!(output.to_str(), "");
 
