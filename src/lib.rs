@@ -69,21 +69,23 @@ fn fromDirEntry(entry: fs::DirEntry) -> DirEntry {
 pub fn hash(dir: &str, relative_dir: &str, sink: &mut io::Write) -> io::Result<()> {
     let mut s = "".to_string();
     let full_dir = &format!("{}/{}", dir, relative_dir);
-    for entry in fs::read_dir(full_dir).ok().unwrap().map(|entry| DirEntry::fromDirEntry(entry.ok().unwrap())).sorted() {
+    let entries = fs::read_dir(full_dir).ok().unwrap().map(|entry| DirEntry::fromDirEntry(entry.ok().unwrap()));
+    for entry in entries.sorted() {
         if entry.is_dir {
                 hash(dir, &format!("{}/{}", relative_dir, entry.filename), sink);
         } else {
             let mut bytes = vec![];
-            let mut file = fs::File::open(format!("{}/{}", full_dir, entry.filename)).ok().unwrap();
-            file.read_to_end(&mut bytes).ok();
-            let hash = hash::hash(hash::Type::SHA512, &bytes);
-            let mut hash_str = "".to_string();
-            for byte in hash.iter() {
-                    hash_str.push_str(&format!("{:02x}", byte));
-            }
+            fs::File::open(format!("{}/{}", full_dir, entry.filename)).ok().unwrap().read_to_end(&mut bytes).ok();
+
+            let mut hash_str = hash::hash(hash::Type::SHA512, &bytes)
+            .iter()
+            .map(|byte| format!("{:02x}", byte))
+            .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str);
+
             s.push_str(&format_line(&format!("{}/{}", relative_dir, entry.filename), &hash_str));
         }
     }
+
     sink.write_all(s.as_bytes())
 }
 
