@@ -50,7 +50,7 @@ fn ne(& self, other: &DirEntry) -> bool {
 
 impl cmp::Ord for DirEntry {
 fn cmp(& self, other: &DirEntry) -> cmp::Ordering {
-        self.filename.cmp(&other.filename).reverse()
+            self.filename.cmp(&other.filename).reverse()
 }
 }
 
@@ -81,15 +81,21 @@ pub fn hash(dir: &str, sink: &mut io::Write) -> () {
                     queue.push(entry);
             }
         } else {
-            let mut bytes = vec![];
-            fs::File::open(format!("{}{}", dir, relative_path)).ok().unwrap().read_to_end(&mut bytes).ok();
+            match fs::File::open(format!("{}{}", dir, relative_path)) {
+                    Ok(mut file) => {
+                    let mut bytes = vec![];
 
-            let hash_str = hash::hash(hash::Type::SHA512, &bytes)
-            .iter()
-            .map(|byte| format!("{:02x}", byte))
-            .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str);
+                    file.read_to_end(&mut bytes).ok();
 
-            sink.write_all(format_line(relative_path, &hash_str).as_bytes()).ok().unwrap();
+                    let hash_str = hash::hash(hash::Type::SHA512, &bytes)
+                    .iter()
+                    .map(|byte| format!("{:02x}", byte))
+                    .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str);
+
+                    sink.write_all(format_line(relative_path, &hash_str).as_bytes()).ok().unwrap();
+                },
+                    _ => ()
+                };
         }
     }
 }
