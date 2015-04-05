@@ -26,6 +26,9 @@ filename: String
 }
 
 fn format_line<'a>(path: &'a str, hash: &'a str) -> String {
+    if path.as_slice().contains("\n") {
+        panic!(format!("path {} contains a newline character", path));
+    }
         hash.to_string() + " " + path + "\n"
 }
 
