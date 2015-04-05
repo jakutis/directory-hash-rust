@@ -83,11 +83,9 @@ pub fn hash(dir: &str, sink: &mut io::Write) -> () {
         } else {
             match fs::File::open(format!("{}{}", dir, relative_path)) {
                     Ok(mut file) => {
-                    let mut bytes = vec![];
-
-                    file.read_to_end(&mut bytes).ok();
-
-                    let hash_str = hash::hash(hash::Type::SHA512, &bytes)
+                    let mut hasher = hash::Hasher::new(hash::Type::SHA512);
+                    io::copy(&mut file, &mut hasher);
+                    let hash_str = hasher.finish()
                     .iter()
                     .map(|byte| format!("{:02x}", byte))
                     .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str);
