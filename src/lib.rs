@@ -138,7 +138,7 @@ pub fn hash(dir: &str, sink: &mut io::Write) -> () {
 
                     match io::copy(&mut file, &mut hasher) {
                         Ok(..) => (),
-                        Err(err) => panic!("error copying file \"{}\": {}", &absolute_path, err)
+                        Err(err) => panic!("error hashing file \"{}\": {}", &absolute_path, err)
                     };
 
                     let hash_str = hasher.finish()
