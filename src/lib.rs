@@ -25,11 +25,11 @@ dir: String,
 filename: String
 }
 
-fn format_line<'a>(path: &'a str, hash: &'a str) -> String {
-    if path.as_slice().contains("\n") {
+fn format_line(path: &str, hash: &str) -> String {
+    if path.contains("\n") {
         panic!(format!("path {} contains a newline character", path));
     }
-        hash.to_string() + " " + path + "\n"
+    hash.to_string() + " " + path + "\n"
 }
 
 impl clone::Clone for DirEntry {
@@ -59,44 +59,100 @@ fn cmp(& self, other: &DirEntry) -> cmp::Ordering {
 
 impl cmp::PartialOrd for DirEntry {
 fn partial_cmp(& self, other: &DirEntry) -> Option<cmp::Ordering> {
-        Some(self.filename.partial_cmp(&other.filename).unwrap().reverse())
+        Some({
+            match self.filename.partial_cmp(&other.filename) {
+                Some(order) => order.reverse(),
+                None => panic!(format!("could not compare {} to {}", self.filename, other.filename))
+            }
+        })
 }
+}
+
+fn get_lossy(dir: &str, entry: fs::DirEntry) -> Option<String> {
+    match entry.path().file_name() {
+        Some(filename) => match filename.to_str() {
+            Some(..) => None,
+            None => Some(filename.to_string_lossy().into_owned().replace("�", "_"))
+        },
+        None => panic!(format!("could not get some filename in dir: {}", dir.to_string()))
+    }
+}
+
+fn rename_if_utf_errors(root: &str, dir: &str, entry: fs::DirEntry) -> Result<(), io::Error> {
+    match entry.path().file_name() {
+        Some(filename) => match filename.to_str() {
+            Some(..) => Ok(()),
+            None => {
+                let lossy = filename.to_string_lossy().into_owned().replace("�", "_");
+                fs::rename(entry.path(), format!("{}{}/{}", root, dir.to_string(), &lossy))
+            }
+        },
+        None => panic!(format!("could not get some filename in dir: {}", dir.to_string()))
+    }
 }
 
 impl DirEntry {
 fn from_dir_entry(dir: &str, entry: fs::DirEntry) -> DirEntry {
     let path = entry.path();
-    DirEntry {dir: dir.to_string(), is_dir: path.is_dir(), filename: path.file_name().unwrap().to_str().unwrap().to_string()}
+    match path.file_name() {
+        Some(filename) => match filename.to_str() {
+            Some(filename) => DirEntry {dir: dir.to_string(), is_dir: path.is_dir(), filename: filename.to_string()},
+            None => {
+                let lossy = filename.to_string_lossy().into_owned().replace("�", "_");
+                panic!("could not convert path {}\n", format!("{}/{}", dir.to_string(), &lossy));
+            }
+        },
+        None => panic!(format!("could not get some filename in dir: {}", dir.to_string()))
+    }
 }
 }
 
 fn read_dir<'_>(dir: &str, relative_dir: &str) -> lazysort::LazySortIterator<'_, DirEntry> {
-                        fs::read_dir(&format!("{}{}", dir, relative_dir)).ok().unwrap().map(|entry| DirEntry::from_dir_entry(relative_dir, entry.ok().unwrap())).sorted()
+    match fs::read_dir(&format!("{}{}", dir, relative_dir)) {
+        Ok(read_dir) => read_dir.map(|entry| DirEntry::from_dir_entry(relative_dir, match entry {
+            Ok(entry) => entry,
+            Err(err) => panic!(format!("could not map dir entry in dir: {}{}; err: {}", dir, relative_dir, err))
+        })).sorted(),
+        Err(err) => panic!(format!("could not read dir: {}{}; err: {}", dir, relative_dir, err))
+
+    }
 }
 
 pub fn hash(dir: &str, sink: &mut io::Write) -> () {
     let mut queue: Vec<_> = read_dir(dir, "").collect();
     while !queue.is_empty() {
-        let entry = queue.pop().unwrap();
+        let entry = match queue.pop() {
+            Some(entry) => entry,
+            None => panic!("could not pop from queue")
+        };
         let relative_path = &format!("{}/{}", entry.dir, entry.filename);
         if entry.is_dir {
             for entry in read_dir(dir, relative_path) {
                     queue.push(entry);
             }
         } else {
-            match fs::File::open(format!("{}{}", dir, relative_path)) {
-                    Ok(mut file) => {
+            let absolute_path = format!("{}{}", dir, relative_path);
+            match fs::File::open(&absolute_path) {
+                Ok(mut file) => {
                     let mut hasher = hash::Hasher::new(hash::Type::SHA512);
-                    io::copy(&mut file, &mut hasher);
+
+                    match io::copy(&mut file, &mut hasher) {
+                        Ok(..) => (),
+                        Err(err) => panic!("error copying file \"{}\": {}", &absolute_path, err)
+                    };
+
                     let hash_str = hasher.finish()
                     .iter()
                     .map(|byte| format!("{:02x}", byte))
                     .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str);
 
-                    sink.write_all(format_line(relative_path, &hash_str).as_bytes()).ok().unwrap();
+                    match sink.write_all(format_line(relative_path, &hash_str).as_bytes()) {
+                        Ok(result) => result,
+                        Err(err) => panic!(format!("could not output the hash {} for {}; err: {}", hash_str, relative_path, err))
+                    };
                 },
-                    _ => ()
-                };
+                _ => ()
+            };
         }
     }
 }
@@ -107,7 +163,10 @@ buffer: Vec<u8>
 
 impl Output {
 fn to_str(& self) -> &str {
-            str::from_utf8(& self .buffer).unwrap()
+    match str::from_utf8(& self .buffer) {
+        Ok(str) => str,
+        Err(err) => panic!(format!("could not convert a buffer to string; err: {}", err))
+    }
 }
 }
 
