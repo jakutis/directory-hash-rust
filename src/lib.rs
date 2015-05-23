@@ -19,6 +19,8 @@ use std::io::Read;
 use std::fs::PathExt;
 use lazysort::Sorted;
 
+mod read_dir;
+
 struct DirEntry {
 is_dir: bool,
 dir: String,
