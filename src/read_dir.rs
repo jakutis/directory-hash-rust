@@ -6,63 +6,56 @@ use std::fs::PathExt;
 use std::io;
 use std::path;
 use std::iter;
+use std::result;
 use core::cmp;
 
-fn read_dir(dir: &str, relative_path: &str) -> Vec<String> {
-    let mut queue = read_dir_shallow(dir, relative_path);
+fn read_dir(dir: &str, relative_path: &str) -> result::Result<Vec<String>, String> {
     let mut output = vec![];
+    let mut queue = try!(read_dir_shallow(dir, relative_path));
 
     while !queue.is_empty() {
-        let path = queue
-            .pop()
-            .unwrap_or_else(||
-                panic!("could not pop from non-empty queue")
-            );
-
-        if(path.is_dir) {
-            queue.extend(read_dir_shallow(dir, &path.path));
-        } else {
-            output.push(path.path);
+        match queue.pop() {
+            None =>
+                unreachable!(),
+            Some(Path{is_dir: true, path: directory}) =>
+                queue.extend(try!(read_dir_shallow(dir, &directory))),
+            Some(Path{is_dir: false, path: file}) =>
+                output.push(file)
         }
     }
 
-    output
+    Ok(output)
 }
 
 struct Path{is_dir: bool, path: String}
 
-fn read_dir_shallow(dir: &str, relative_path: &str) -> Vec<Path> {
+fn read_dir_shallow(dir: &str, relative_path: &str) -> result::Result<Vec<Path>, String> {
     let absolute_path = format!("{}{}", dir, relative_path);
-    let path_to_string = |path: path::PathBuf| path
-        .file_name()
-        .unwrap_or_else(||
-            panic!(format!("could not get entry filename in dir: {}", absolute_path))
-        )
-        .to_str()
-        .unwrap_or_else(||
-            panic!(format!("could not convert file OS string to string in dir: {}", absolute_path))
-        )
-        .to_string();
+    let entries = try!(fs::read_dir(&absolute_path).map_err(|err|
+        format!("could not read dir: {}; err: {}", absolute_path, err)
+    ));
+    let mut paths: Vec<Path> = vec![];
 
-    let mut paths: Vec<Path> = fs::read_dir(&absolute_path)
-        .unwrap_or_else(|err|
-            panic!(format!("could not read dir: {}; err: {}", absolute_path, err))
-        )
-        .map(|entry| entry
-            .unwrap_or_else(|err|
-                panic!(format!("could not read entry in dir: {}; err: {}", absolute_path, err))
-            )
-            .path()
-        )
-        .map(|path| Path {
+    for entry in entries {
+        let path = try!(entry.map_err(|err|
+            format!("could not read entry in dir: {}; err: {}", absolute_path, err)
+        )).path();
+
+        let name_osstr = try!(path.file_name()
+            .ok_or(format!("could not get entry filename in dir: {}", absolute_path))
+        );
+
+        let name = try!(name_osstr.to_str()
+            .ok_or(format!("could not convert file OS string to string in dir: {}", absolute_path))
+        ).to_string();
+
+        paths.push(Path {
             is_dir: path.is_dir(),
-            path: format!("{}/{}", relative_path, path_to_string(path))
+            path: format!("{}/{}", relative_path, name)
         })
-        .collect();
-
+    }
     paths.sort_by(|a, b| b.path.cmp(&a.path));
-
-    paths
+    Ok(paths)
 }
 
 struct Context {
@@ -93,7 +86,7 @@ fn after(ctx: Context) {
 fn reads_empty_directory() {
     let ctx = before();
 
-    let paths = read_dir(&ctx.dir, "");
+    let paths = read_dir(&ctx.dir, "").unwrap();
 
     assert_eq!(paths.len(), 0);
 
@@ -105,7 +98,7 @@ fn reads_directory_with_one_file() {
     let ctx = before();
     fs::File::create(format!("{}/{}", &ctx.dir, &ctx.file)).ok();
 
-    let paths = read_dir(&ctx.dir, "");
+    let paths = read_dir(&ctx.dir, "").unwrap();
 
     assert_eq!(paths.len(), 1);
     assert_eq!(paths[0], format!("/{}", &ctx.file));
@@ -118,7 +111,7 @@ fn reads_directory_with_one_subdirectory() {
     let ctx = before();
     fs::create_dir(format!("{}/{}", &ctx.dir, &ctx.subdir)).ok();
 
-    let paths = read_dir(&ctx.dir, "");
+    let paths = read_dir(&ctx.dir, "").unwrap();
 
     assert_eq!(paths.len(), 0);
 
@@ -131,7 +124,7 @@ fn reads_directory_with_one_file_in_subdir() {
     fs::create_dir(format!("{}/{}", &ctx.dir, &ctx.subdir)).ok();
     fs::File::create(format!("{}/{}/{}", &ctx.dir, &ctx.subdir, &ctx.file)).ok();
 
-    let paths = read_dir(&ctx.dir, "");
+    let paths = read_dir(&ctx.dir, "").unwrap();
 
     assert_eq!(paths.len(), 1);
     assert_eq!(paths[0], format!("/{}/{}", &ctx.subdir, &ctx.file));
@@ -145,7 +138,7 @@ fn reads_directory_in_sorted_order() {
     fs::File::create(format!("{}/{}", &ctx.dir, &ctx.file)).ok();
     fs::File::create(format!("{}/{}", &ctx.dir, &ctx.fileB)).ok();
 
-    let paths = read_dir(&ctx.dir, "");
+    let paths = read_dir(&ctx.dir, "").unwrap();
 
     assert_eq!(paths.len(), 2);
     assert_eq!(paths[0], format!("/{}", &ctx.file));
