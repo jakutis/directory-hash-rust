@@ -6,12 +6,10 @@ pub fn read_dir(dir: &str, relative_path: &str) -> Result<Vec<String>, String> {
     let mut queue = try!(read_dir_shallow(dir, relative_path));
 
     while !queue.is_empty() {
-        match queue.pop() {
-            None =>
-                unreachable!(),
-            Some(Path{is_dir: true, path: directory}) =>
+        match queue.pop().unwrap() {
+            Path{is_dir: true, path: directory} =>
                 queue.extend(try!(read_dir_shallow(dir, &directory))),
-            Some(Path{is_dir: false, path: file}) =>
+            Path{is_dir: false, path: file} =>
                 output.push(file)
         }
     }
