@@ -21,12 +21,6 @@ use lazysort::Sorted;
 
 mod read_dir;
 
-struct DirEntry {
-is_dir: bool,
-dir: String,
-filename: String
-}
-
 fn format_line(path: &str, hash: &str) -> String {
     if path.contains("\n") {
         panic!(format!("path {} contains a newline character", path));
@@ -34,128 +28,35 @@ fn format_line(path: &str, hash: &str) -> String {
     hash.to_string() + " " + path + "\n"
 }
 
-impl clone::Clone for DirEntry {
-fn clone(& self) -> DirEntry {
-    DirEntry {dir: self.dir.clone(), is_dir: self.is_dir, filename: self.filename.clone()}
-}
-}
-
-impl cmp::Eq for DirEntry {
-
-}
-
-impl cmp::PartialEq for DirEntry {
-fn eq(& self, other: &DirEntry) -> bool {
-    self.filename == other.filename
-}
-fn ne(& self, other: &DirEntry) -> bool {
-    self.filename != other.filename
-}
-}
-
-impl cmp::Ord for DirEntry {
-fn cmp(& self, other: &DirEntry) -> cmp::Ordering {
-            self.filename.cmp(&other.filename).reverse()
-}
-}
-
-impl cmp::PartialOrd for DirEntry {
-fn partial_cmp(& self, other: &DirEntry) -> Option<cmp::Ordering> {
-        Some({
-            match self.filename.partial_cmp(&other.filename) {
-                Some(order) => order.reverse(),
-                None => panic!(format!("could not compare {} to {}", self.filename, other.filename))
-            }
-        })
-}
-}
-
-fn get_lossy(dir: &str, entry: fs::DirEntry) -> Option<String> {
-    match entry.path().file_name() {
-        Some(filename) => match filename.to_str() {
-            Some(..) => None,
-            None => Some(filename.to_string_lossy().into_owned().replace("�", "_"))
-        },
-        None => panic!(format!("could not get some filename in dir: {}", dir.to_string()))
-    }
-}
-
-fn rename_if_utf_errors(root: &str, dir: &str, entry: fs::DirEntry) -> Result<(), io::Error> {
-    match entry.path().file_name() {
-        Some(filename) => match filename.to_str() {
-            Some(..) => Ok(()),
-            None => {
-                let lossy = filename.to_string_lossy().into_owned().replace("�", "_");
-                fs::rename(entry.path(), format!("{}{}/{}", root, dir.to_string(), &lossy))
-            }
-        },
-        None => panic!(format!("could not get some filename in dir: {}", dir.to_string()))
-    }
-}
-
-impl DirEntry {
-fn from_dir_entry(dir: &str, entry: fs::DirEntry) -> DirEntry {
-    let path = entry.path();
-    match path.file_name() {
-        Some(filename) => match filename.to_str() {
-            Some(filename) => DirEntry {dir: dir.to_string(), is_dir: path.is_dir(), filename: filename.to_string()},
-            None => {
-                let lossy = filename.to_string_lossy().into_owned().replace("�", "_");
-                panic!("could not convert path {}\n", format!("{}/{}", dir.to_string(), &lossy));
-            }
-        },
-        None => panic!(format!("could not get some filename in dir: {}", dir.to_string()))
-    }
-}
-}
-
-fn read_dir<'_>(dir: &str, relative_dir: &str) -> lazysort::LazySortIterator<'_, DirEntry> {
-    match fs::read_dir(&format!("{}{}", dir, relative_dir)) {
-        Ok(read_dir) => read_dir.map(|entry| DirEntry::from_dir_entry(relative_dir, match entry {
-            Ok(entry) => entry,
-            Err(err) => panic!(format!("could not map dir entry in dir: {}{}; err: {}", dir, relative_dir, err))
-        })).sorted(),
-        Err(err) => panic!(format!("could not read dir: {}{}; err: {}", dir, relative_dir, err))
-
-    }
-}
-
 pub fn hash(dir: &str, sink: &mut io::Write) -> () {
-    let mut queue: Vec<_> = read_dir(dir, "").collect();
-    while !queue.is_empty() {
-        let entry = match queue.pop() {
-            Some(entry) => entry,
-            None => panic!("could not pop from queue")
-        };
-        let relative_path = &format!("{}/{}", entry.dir, entry.filename);
-        if entry.is_dir {
-            for entry in read_dir(dir, relative_path) {
-                    queue.push(entry);
+    match read_dir::read_dir(dir, "") {
+        Ok(relative_paths) => {
+            for relative_path in relative_paths {
+                let absolute_path = format!("{}{}", dir, relative_path);
+                match fs::File::open(&absolute_path) {
+                    Ok(mut file) => {
+                        let mut hasher = hash::Hasher::new(hash::Type::SHA512);
+
+                        match io::copy(&mut file, &mut hasher) {
+                            Ok(..) => (),
+                            Err(err) => panic!("error hashing file \"{}\": {}", &absolute_path, err)
+                        };
+
+                        let hash_str = hasher.finish()
+                        .iter()
+                        .map(|byte| format!("{:02x}", byte))
+                        .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str);
+
+                        match sink.write_all(format_line(&relative_path, &hash_str).as_bytes()) {
+                            Ok(result) => result,
+                            Err(err) => panic!(format!("could not output the hash {} for {}; err: {}", hash_str, relative_path, err))
+                        };
+                    },
+                    _ => ()
+                };
             }
-        } else {
-            let absolute_path = format!("{}{}", dir, relative_path);
-            match fs::File::open(&absolute_path) {
-                Ok(mut file) => {
-                    let mut hasher = hash::Hasher::new(hash::Type::SHA512);
-
-                    match io::copy(&mut file, &mut hasher) {
-                        Ok(..) => (),
-                        Err(err) => panic!("error hashing file \"{}\": {}", &absolute_path, err)
-                    };
-
-                    let hash_str = hasher.finish()
-                    .iter()
-                    .map(|byte| format!("{:02x}", byte))
-                    .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str);
-
-                    match sink.write_all(format_line(relative_path, &hash_str).as_bytes()) {
-                        Ok(result) => result,
-                        Err(err) => panic!(format!("could not output the hash {} for {}; err: {}", hash_str, relative_path, err))
-                    };
-                },
-                _ => ()
-            };
         }
+        Err(err) => panic!(err)
     }
 }
 
@@ -181,6 +82,70 @@ fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
 }
 fn flush(&mut self) -> io::Result<()> { Ok(())}
 }
+
+/*
+pub fn import(dir: &str, all: &str, path: &str, absolute_path: &str, backup_dir: &str, sink: &mut io::Write) -> () {
+}
+
+#[test]
+fn imports_new_files() {
+    let mut rng = rand::thread_rng();
+    let dir = &format!("test.{}", rng.gen::<i32>());
+    let mut output = Output {
+    buffer: vec![]
+    };
+    fs::create_dir(dir).ok();
+
+    /*
+    // directory all.file path absolute-path backup-directory
+    import(dir, "", "", "", "", &mut output);
+
+    Finds all new, changed and missing paths.
+	Backs up files (actually happens in the next step, to avoid copying).
+	Moves new and changed, deletes missing.
+	Lists all paths and their hashes.
+     */
+    let current_paths = read_dir(dir, path);
+    let known_items = read_all(all);
+    let new_items = find_new(known_items, current_paths);
+    let changed_items = find_changed(known_items, current_paths);
+    let missing_items = find_missing(known_items, current_paths);
+    backup_move_cleanup(dir, target_dir, new_items);
+    backup_move_cleanup(dir, target_dir, changed_items);
+    delete(target_dir, missing_items);
+    merge_add(known_items, new_items);
+    merge_update(known_items, changed_items);
+    merge_remove(known_items, missing_items);
+    output(known_items);
+
+    fs::remove_dir_all(dir).ok();
+}
+
+pub fn list_paths_with_utf8_errors(TODO) -> ()
+
+fn get_lossy(dir: &str, entry: fs::DirEntry) -> Option<String> {
+    match entry.path().file_name() {
+        Some(filename) => match filename.to_str() {
+            Some(..) => None,
+            None => Some(filename.to_string_lossy().into_owned().replace("�", "_"))
+        },
+        None => panic!(format!("could not get some filename in dir: {}", dir.to_string()))
+    }
+}
+
+fn rename_if_utf_errors(root: &str, dir: &str, entry: fs::DirEntry) -> Result<(), io::Error> {
+    match entry.path().file_name() {
+        Some(filename) => match filename.to_str() {
+            Some(..) => Ok(()),
+            None => {
+                let lossy = filename.to_string_lossy().into_owned().replace("�", "_");
+                fs::rename(entry.path(), format!("{}{}/{}", root, dir.to_string(), &lossy))
+            }
+        },
+        None => panic!(format!("could not get some filename in dir: {}", dir.to_string()))
+    }
+}
+*/
 
 #[test]
 fn hashes_directory_with_a_nonempty_subdir_and_file() {

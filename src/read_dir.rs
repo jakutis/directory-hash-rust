@@ -9,7 +9,7 @@ use std::iter;
 use std::result;
 use core::cmp;
 
-fn read_dir(dir: &str, relative_path: &str) -> result::Result<Vec<String>, String> {
+pub fn read_dir(dir: &str, relative_path: &str) -> result::Result<Vec<String>, String> {
     let mut output = vec![];
     let mut queue = try!(read_dir_shallow(dir, relative_path));
 
