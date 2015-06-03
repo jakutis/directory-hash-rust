@@ -1,75 +1,23 @@
 #![feature(path_ext)]
-#![feature(core)]
 
-extern crate openssl;
 extern crate rand;
-extern crate lazysort;
-extern crate core;
+extern crate openssl;
 
 use std::io;
-use std::str;
-use std::fs;
-use openssl::crypto::hash;
-use core::cmp;
-use core::clone;
-
-use rand::Rng;
-use std::io::Write;
-use std::io::Read;
-use std::fs::PathExt;
-use lazysort::Sorted;
 
 mod read_dir;
-
-struct File {
-    path: String,
-    hash: String
-}
-
-impl ToString for File {
-    fn to_string(&self) -> String {
-        if self.path.contains("\n") {
-            panic!(format!("path {} contains a newline character", self.path));
-        }
-        self.hash.to_string() + " " + &self.path + "\n"
-    }
-}
+mod hash;
 
 pub fn hash(dir: &str, sink: &mut io::Write) -> () {
-    match read_dir::read_dir(dir, "") {
-        Ok(relative_paths) => {
-            for relative_path in relative_paths {
-                let absolute_path = format!("{}{}", dir, relative_path);
-                match fs::File::open(&absolute_path) {
-                    Ok(mut file) => {
-                        let mut hasher = hash::Hasher::new(hash::Type::SHA512);
-
-                        match io::copy(&mut file, &mut hasher) {
-                            Ok(..) => (),
-                            Err(err) => panic!("error hashing file \"{}\": {}", &absolute_path, err)
-                        };
-
-                        let file = File {
-                            path: relative_path,
-                            hash: hasher.finish()
-                                    .iter()
-                                    .map(|byte| format!("{:02x}", byte))
-                                    .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str)
-                        };
-
-                        match sink.write_all(file.to_string().as_bytes()) {
-                            Ok(result) => result,
-                            Err(err) => panic!(format!("could not output: {}; err: {}", file.to_string(), err))
-                        };
-                    },
-                    _ => ()
-                };
-            }
-        }
-        Err(err) => panic!(err)
+    for file in hash::hash(dir).unwrap() {
+        sink.write_all(file.to_string().as_bytes()).map_err(|err|
+            format!("could not output: {}; err: {}", file.to_string(), err)
+        ).unwrap();
     }
 }
 
+/*
+ * TODO mock the hash::hash() and test hash()
 struct Output {
 buffer: Vec<u8>
 }
@@ -92,6 +40,7 @@ fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
 }
 fn flush(&mut self) -> io::Result<()> { Ok(())}
 }
+*/
 
 /*
 pub fn import(dir: &str, all: &str, path: &str, absolute_path: &str, backup_dir: &str, sink: &mut io::Write) -> () {
@@ -157,122 +106,3 @@ fn rename_if_utf_errors(root: &str, dir: &str, entry: fs::DirEntry) -> Result<()
 }
 */
 
-#[test]
-fn hashes_directory_with_a_nonempty_subdir_and_file() {
-    let mut rng = rand::thread_rng();
-    let dir = &format!("test.{}", rng.gen::<i32>());
-    let file1 = "B";
-    let subdir = "A";
-    let file2 = "A";
-    let mut output = Output {
-    buffer: vec![]
-    };
-    fs::create_dir(dir).ok();
-    fs::create_dir(format!("{}/{}", dir, subdir)).ok();
-    fs::File::create(format!("{}/{}", dir, file1)).ok();
-    fs::File::create(format!("{}/{}/{}", dir, subdir, file2)).ok();
-
-    hash(dir, &mut output);
-
-    let hash = "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e";
-    assert_eq!(output.to_str(), File{path: format!("/{}/{}", subdir, file2), hash: hash.to_string()}.to_string() + &File{path: format!("/{}", file1), hash: hash.to_string()}.to_string());
-
-    fs::remove_dir_all(dir).ok();
-}
-
-#[test]
-fn hashes_directory_with_a_nonempty_subdir() {
-    let mut rng = rand::thread_rng();
-    let dir = &format!("test.{}", rng.gen::<i32>());
-    let subdir = &format!("test.{}", rng.gen::<i32>());
-    let file = &format!("test.{}", rng.gen::<i32>());
-    let mut output = Output {
-    buffer: vec![]
-    };
-    fs::create_dir(dir).ok();
-    fs::create_dir(format!("{}/{}", dir, subdir)).ok();
-    fs::File::create(format!("{}/{}/{}", dir, subdir, file)).ok().unwrap().write_all("testas".as_bytes()).ok();
-
-    hash(dir, &mut output);
-
-    let hash = "2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c";
-    assert_eq!(output.to_str(), File{path: format!("/{}/{}", subdir, file), hash: hash.to_string()}.to_string());
-
-    fs::remove_dir_all(dir).ok();
-}
-
-#[test]
-fn hashes_directory_sorted_by_filename() {
-    let mut rng = rand::thread_rng();
-    let dir = &format!("test.{}", rng.gen::<i32>());
-    let file_a = "A";
-    let file_b = "B";
-    let mut output = Output {
-    buffer: vec![]
-    };
-    fs::create_dir(dir).ok();
-    fs::File::create(format!("{}/{}", dir, file_a)).ok().unwrap().write_all("testas".as_bytes()).ok();
-    fs::File::create(format!("{}/{}", dir, file_b)).ok().unwrap().write_all("testas2".as_bytes()).ok();
-
-    hash(dir, &mut output);
-
-    let hashA = "2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c";
-    let hashB = "47a968f5324c4cb0225c65948e30b3681f348f6ed9d4b4d6968f870743a93ea1cb4597247868442431edb5e858942c95146e1f82704d37a6d3ab9515cab8fd0c";
-    assert_eq!(output.to_str(), File{path: format!("/{}", file_a), hash: hashA.to_string()}.to_string() + &File{path: format!("/{}", file_b), hash: hashB.to_string()}.to_string());
-
-    fs::remove_dir_all(dir).ok();
-}
-
-#[test]
-fn hashes_directory_with_one_nonempty_file() {
-    let mut rng = rand::thread_rng();
-    let dir = &format!("test.{}", rng.gen::<i32>());
-    let file = &format!("test.{}", rng.gen::<i32>());
-    let mut output = Output {
-    buffer: vec![]
-    };
-    fs::create_dir(dir).ok();
-    fs::File::create(format!("{}/{}", dir, file)).ok().unwrap().write_all("testas".as_bytes()).ok();
-
-    hash(dir, &mut output);
-
-    let hash = "2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c";
-    assert_eq!(output.to_str(), File{path: format!("/{}", file), hash: hash.to_string()}.to_string());
-
-    fs::remove_dir_all(dir).ok();
-}
-
-#[test]
-fn hashes_directory_with_one_empty_file() {
-    let mut rng = rand::thread_rng();
-    let dir = &format!("test.{}", rng.gen::<i32>());
-    let file = &format!("test.{}", rng.gen::<i32>());
-    let mut output = Output {
-    buffer: vec![]
-    };
-    fs::create_dir(dir).ok();
-    fs::File::create(format!("{}/{}", dir, file)).ok();
-
-    hash(dir, &mut output);
-
-    let hash = "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e";
-    assert_eq!(output.to_str(), File {path: format!("/{}", file), hash: hash.to_string()}.to_string());
-
-    fs::remove_dir_all(dir).ok();
-}
-
-#[test]
-fn hashes_empty_directory() {
-    let mut rng = rand::thread_rng();
-    let dir = &format!("test.{}", rng.gen::<i32>());
-    let mut output = Output {
-    buffer: vec![]
-    };
-    fs::create_dir(dir).ok();
-
-    hash(dir, &mut output);
-
-    assert_eq!(output.to_str(), "");
-
-    fs::remove_dir_all(dir).ok();
-}

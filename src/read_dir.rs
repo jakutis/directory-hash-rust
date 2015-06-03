@@ -1,15 +1,7 @@
-extern crate rand;
-
-use rand::Rng;
 use std::fs;
 use std::fs::PathExt;
-use std::io;
-use std::path;
-use std::iter;
-use std::result;
-use core::cmp;
 
-pub fn read_dir(dir: &str, relative_path: &str) -> result::Result<Vec<String>, String> {
+pub fn read_dir(dir: &str, relative_path: &str) -> Result<Vec<String>, String> {
     let mut output = vec![];
     let mut queue = try!(read_dir_shallow(dir, relative_path));
 
@@ -29,7 +21,7 @@ pub fn read_dir(dir: &str, relative_path: &str) -> result::Result<Vec<String>, S
 
 struct Path{is_dir: bool, path: String}
 
-fn read_dir_shallow(dir: &str, relative_path: &str) -> result::Result<Vec<Path>, String> {
+fn read_dir_shallow(dir: &str, relative_path: &str) -> Result<Vec<Path>, String> {
     let absolute_path = format!("{}{}", dir, relative_path);
     let entries = try!(fs::read_dir(&absolute_path).map_err(|err|
         format!("could not read dir: {}; err: {}", absolute_path, err)
@@ -58,91 +50,99 @@ fn read_dir_shallow(dir: &str, relative_path: &str) -> result::Result<Vec<Path>,
     Ok(paths)
 }
 
-struct Context {
-    dir: String, 
-    file: String,
-    fileB: String,
-    subdir: String
-}
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use rand;
+    use rand::Rng;
+    use read_dir::read_dir;
 
-fn before() -> Context {
-    let mut rng = rand::thread_rng();
-    let dir = format!("test.{}", rng.gen::<i32>());
-    fs::create_dir(&dir).ok();
+    struct Context {
+        dir: String, 
+        file: String,
+        file_b: String,
+        subdir: String
+    }
 
-    return Context {
-        dir: dir,
-        file: format!("testA.{}", rng.gen::<i32>()),
-        fileB: format!("testB.{}", rng.gen::<i32>()),
-        subdir: format!("test.{}", rng.gen::<i32>())
-    };
-}
+    fn before() -> Context {
+        let mut rng = rand::thread_rng();
+        let dir = format!("test.{}", rng.gen::<i32>());
+        fs::create_dir(&dir).ok();
 
-fn after(ctx: Context) {
-            fs::remove_dir_all(ctx.dir).ok();
-}
+        return Context {
+            dir: dir,
+            file: format!("testA.{}", rng.gen::<i32>()),
+            file_b: format!("testB.{}", rng.gen::<i32>()),
+            subdir: format!("test.{}", rng.gen::<i32>())
+        };
+    }
 
-#[test]
-fn reads_empty_directory() {
-    let ctx = before();
+    fn after(ctx: Context) {
+                fs::remove_dir_all(ctx.dir).ok();
+    }
 
-    let paths = read_dir(&ctx.dir, "").unwrap();
+    #[test]
+    fn reads_empty_directory() {
+        let ctx = before();
 
-    assert_eq!(paths.len(), 0);
+        let paths = read_dir(&ctx.dir, "").unwrap();
 
-    after(ctx);
-}
+        assert_eq!(paths.len(), 0);
 
-#[test]
-fn reads_directory_with_one_file() {
-    let ctx = before();
-    fs::File::create(format!("{}/{}", &ctx.dir, &ctx.file)).ok();
+        after(ctx);
+    }
 
-    let paths = read_dir(&ctx.dir, "").unwrap();
+    #[test]
+    fn reads_directory_with_one_file() {
+        let ctx = before();
+        fs::File::create(format!("{}/{}", &ctx.dir, &ctx.file)).ok();
 
-    assert_eq!(paths.len(), 1);
-    assert_eq!(paths[0], format!("/{}", &ctx.file));
+        let paths = read_dir(&ctx.dir, "").unwrap();
 
-    after(ctx);
-}
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0], format!("/{}", &ctx.file));
 
-#[test]
-fn reads_directory_with_one_subdirectory() {
-    let ctx = before();
-    fs::create_dir(format!("{}/{}", &ctx.dir, &ctx.subdir)).ok();
+        after(ctx);
+    }
 
-    let paths = read_dir(&ctx.dir, "").unwrap();
+    #[test]
+    fn reads_directory_with_one_subdirectory() {
+        let ctx = before();
+        fs::create_dir(format!("{}/{}", &ctx.dir, &ctx.subdir)).ok();
 
-    assert_eq!(paths.len(), 0);
+        let paths = read_dir(&ctx.dir, "").unwrap();
 
-    after(ctx);
-}
+        assert_eq!(paths.len(), 0);
 
-#[test]
-fn reads_directory_with_one_file_in_subdir() {
-    let ctx = before();
-    fs::create_dir(format!("{}/{}", &ctx.dir, &ctx.subdir)).ok();
-    fs::File::create(format!("{}/{}/{}", &ctx.dir, &ctx.subdir, &ctx.file)).ok();
+        after(ctx);
+    }
 
-    let paths = read_dir(&ctx.dir, "").unwrap();
+    #[test]
+    fn reads_directory_with_one_file_in_subdir() {
+        let ctx = before();
+        fs::create_dir(format!("{}/{}", &ctx.dir, &ctx.subdir)).ok();
+        fs::File::create(format!("{}/{}/{}", &ctx.dir, &ctx.subdir, &ctx.file)).ok();
 
-    assert_eq!(paths.len(), 1);
-    assert_eq!(paths[0], format!("/{}/{}", &ctx.subdir, &ctx.file));
+        let paths = read_dir(&ctx.dir, "").unwrap();
 
-    after(ctx);
-}
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0], format!("/{}/{}", &ctx.subdir, &ctx.file));
 
-#[test]
-fn reads_directory_in_sorted_order() {
-    let ctx = before();
-    fs::File::create(format!("{}/{}", &ctx.dir, &ctx.file)).ok();
-    fs::File::create(format!("{}/{}", &ctx.dir, &ctx.fileB)).ok();
+        after(ctx);
+    }
 
-    let paths = read_dir(&ctx.dir, "").unwrap();
+    #[test]
+    fn reads_directory_in_sorted_order() {
+        let ctx = before();
+        fs::File::create(format!("{}/{}", &ctx.dir, &ctx.file)).ok();
+        fs::File::create(format!("{}/{}", &ctx.dir, &ctx.file_b)).ok();
 
-    assert_eq!(paths.len(), 2);
-    assert_eq!(paths[0], format!("/{}", &ctx.file));
-    assert_eq!(paths[1], format!("/{}", &ctx.fileB));
+        let paths = read_dir(&ctx.dir, "").unwrap();
 
-    after(ctx);
+        assert_eq!(paths.len(), 2);
+        assert_eq!(paths[0], format!("/{}", &ctx.file));
+        assert_eq!(paths[1], format!("/{}", &ctx.file_b));
+
+        after(ctx);
+    }
 }
