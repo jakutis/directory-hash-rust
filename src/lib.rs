@@ -21,11 +21,18 @@ use lazysort::Sorted;
 
 mod read_dir;
 
-fn format_line(path: &str, hash: &str) -> String {
-    if path.contains("\n") {
-        panic!(format!("path {} contains a newline character", path));
+struct File {
+    path: String,
+    hash: String
+}
+
+impl ToString for File {
+    fn to_string(&self) -> String {
+        if self.path.contains("\n") {
+            panic!(format!("path {} contains a newline character", self.path));
+        }
+        self.hash.to_string() + " " + &self.path + "\n"
     }
-    hash.to_string() + " " + path + "\n"
 }
 
 pub fn hash(dir: &str, sink: &mut io::Write) -> () {
@@ -42,14 +49,17 @@ pub fn hash(dir: &str, sink: &mut io::Write) -> () {
                             Err(err) => panic!("error hashing file \"{}\": {}", &absolute_path, err)
                         };
 
-                        let hash_str = hasher.finish()
-                        .iter()
-                        .map(|byte| format!("{:02x}", byte))
-                        .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str);
+                        let file = File {
+                            path: relative_path,
+                            hash: hasher.finish()
+                                    .iter()
+                                    .map(|byte| format!("{:02x}", byte))
+                                    .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str)
+                        };
 
-                        match sink.write_all(format_line(&relative_path, &hash_str).as_bytes()) {
+                        match sink.write_all(file.to_string().as_bytes()) {
                             Ok(result) => result,
-                            Err(err) => panic!(format!("could not output the hash {} for {}; err: {}", hash_str, relative_path, err))
+                            Err(err) => panic!(format!("could not output: {}; err: {}", file.to_string(), err))
                         };
                     },
                     _ => ()
@@ -165,7 +175,7 @@ fn hashes_directory_with_a_nonempty_subdir_and_file() {
     hash(dir, &mut output);
 
     let hash = "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e";
-    assert_eq!(output.to_str(), format_line(&format!("/{}/{}", subdir, file2), hash) + &format_line(&format!("/{}", file1), hash));
+    assert_eq!(output.to_str(), File{path: format!("/{}/{}", subdir, file2), hash: hash.to_string()}.to_string() + &File{path: format!("/{}", file1), hash: hash.to_string()}.to_string());
 
     fs::remove_dir_all(dir).ok();
 }
@@ -186,7 +196,7 @@ fn hashes_directory_with_a_nonempty_subdir() {
     hash(dir, &mut output);
 
     let hash = "2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c";
-    assert_eq!(output.to_str(), format_line(&format!("/{}/{}", subdir, file), hash));
+    assert_eq!(output.to_str(), File{path: format!("/{}/{}", subdir, file), hash: hash.to_string()}.to_string());
 
     fs::remove_dir_all(dir).ok();
 }
@@ -208,7 +218,7 @@ fn hashes_directory_sorted_by_filename() {
 
     let hashA = "2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c";
     let hashB = "47a968f5324c4cb0225c65948e30b3681f348f6ed9d4b4d6968f870743a93ea1cb4597247868442431edb5e858942c95146e1f82704d37a6d3ab9515cab8fd0c";
-    assert_eq!(output.to_str(), format_line(&format!("/{}", file_a), hashA) + &format_line(&format!("/{}", file_b), hashB));
+    assert_eq!(output.to_str(), File{path: format!("/{}", file_a), hash: hashA.to_string()}.to_string() + &File{path: format!("/{}", file_b), hash: hashB.to_string()}.to_string());
 
     fs::remove_dir_all(dir).ok();
 }
@@ -227,7 +237,7 @@ fn hashes_directory_with_one_nonempty_file() {
     hash(dir, &mut output);
 
     let hash = "2e3c6bb28df6cb0603f00fdf520539200d05ab237a1348ec1c598e8c6864d93f6a6da9c81b5ae7117687d9e1b1b41682afc2d02269854b5779a2bd645917e05c";
-    assert_eq!(output.to_str(), format_line(&format!("/{}", file), hash));
+    assert_eq!(output.to_str(), File{path: format!("/{}", file), hash: hash.to_string()}.to_string());
 
     fs::remove_dir_all(dir).ok();
 }
@@ -246,7 +256,7 @@ fn hashes_directory_with_one_empty_file() {
     hash(dir, &mut output);
 
     let hash = "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e";
-    assert_eq!(output.to_str(), format_line(&format!("/{}", file), hash));
+    assert_eq!(output.to_str(), File {path: format!("/{}", file), hash: hash.to_string()}.to_string());
 
     fs::remove_dir_all(dir).ok();
 }
