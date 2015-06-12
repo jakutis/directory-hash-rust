@@ -7,9 +7,5 @@ authors = ["Vytautas Jakutis <vytautas@jakut.is>"]
 openssl = "0.6"
 rand = "0.3"
 
-[dependencies.lazysort]
-git = "https://github.com/jakutis/rust-lazysort"
-rev = "c22088c809666d4fb4df5204701a86753785d11a"
-
 [lib]
 name = "dirhash"
