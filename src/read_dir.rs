@@ -50,10 +50,19 @@ fn read_dir_shallow(dir: &str, relative_path: &str) -> Result<Vec<Path>, String>
             .ok_or(format!("could not convert file OS string to string in dir: {}", absolute_path))
         ).to_string();
 
-        paths.push(Path {
-            is_dir: path.is_dir(),
-            path: format!("{}/{}", relative_path, name)
-        })
+        let absolute_path = format!("{}/{}", absolute_path, name);
+
+        let is_dir = path.is_dir();
+        let is_file = path.is_file();
+
+        if is_dir || is_file {
+            paths.push(Path {
+                is_dir: is_dir,
+                path: format!("{}/{}", relative_path, name)
+            })
+        } else {
+            return Err(format!("found path that is neither file nor directory: {}", absolute_path))
+        }
     }
     paths.sort_by(|a, b| b.path.cmp(&a.path));
     Ok(paths)
@@ -65,6 +74,7 @@ mod tests {
     use rand;
     use rand::Rng;
     use read_dir::read_dir;
+    use std::os::unix::fs::symlink;
 
     struct Context {
         dir: String, 
@@ -110,6 +120,17 @@ mod tests {
 
         assert_eq!(paths.next(), Some(Ok(format!("/{}", &ctx.file))));
         assert_eq!(paths.next(), None);
+
+        after(ctx);
+    }
+
+    #[test]
+    fn reads_directory_with_one_symlink() {
+        let ctx = before();
+        symlink(format!("{}/{}", &ctx.dir, "nonexistantpath"), format!("{}/{}", &ctx.dir, "symlink")).ok();
+        let mut paths = read_dir(&ctx.dir, "");
+
+        assert_eq!(paths.next().unwrap().is_err(), true);
 
         after(ctx);
     }
