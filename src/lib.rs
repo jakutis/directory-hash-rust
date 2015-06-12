@@ -8,17 +8,32 @@ use std::io;
 mod read_dir;
 mod hash;
 
+fn output(string: String, sink: &mut io::Write) -> () {
+    sink.write_all(string.as_bytes()).map_err(|err| format!("could not output: {}; err: {}", string, err)).unwrap()
+}
+
 pub fn hash(dir: &str, sink: &mut io::Write) -> () {
     let files = read_dir::read_dir(dir, "").map(|relative_path| {
         match relative_path {
-            Err(err) => panic!(format!("could not hash {}; err: {}", dir.to_string(), err)),
+            Err(err) => panic!(format!("could not list dir {}; err: {}", dir.to_string(), err)),
             Ok(relative_path) => hash::hash(dir, &relative_path)
         }
     });
     for file in files {
-        let file = file.unwrap().to_string();
+        output(file.unwrap().to_string(), sink);
+    }
+}
 
-        sink.write_all(file.as_bytes()).map_err(|err| format!("could not output: {}; err: {}", file, err)).unwrap();
+pub fn list_errors(dir: &str, sink: &mut io::Write) -> () {
+    for file in read_dir::read_dir(dir, "") {
+        match file {
+            Err(err) => output(format!("{}\n", err), sink),
+            Ok(path) => {
+                if path.contains("\n") {
+                    output(format!("path {} contains a newline character\n", path), sink)
+                }
+            }
+        }
     }
 }
 
