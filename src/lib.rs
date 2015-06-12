@@ -1,5 +1,3 @@
-#![feature(path_ext)]
-
 extern crate rand;
 extern crate openssl;
 

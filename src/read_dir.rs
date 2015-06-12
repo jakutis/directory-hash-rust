@@ -1,5 +1,4 @@
 use std::fs;
-use std::fs::PathExt;
 
 pub struct Paths{dir: String, queue: Vec<Path>}
 
@@ -51,9 +50,16 @@ fn read_dir_shallow(dir: &str, relative_path: &str) -> Result<Vec<Path>, String>
         ).to_string();
 
         let absolute_path = format!("{}/{}", absolute_path, name);
+        let link = fs::read_link(&absolute_path);
 
-        let is_dir = path.is_dir();
-        let is_file = path.is_file();
+        if link.is_ok() {
+            return Err(format!("found path that is a soft link: {}", absolute_path))
+        }
+        let metadata = try!(fs::metadata(&absolute_path).map_err(|err|
+            format!("could not get metadata of {}; err: {}", absolute_path, err)
+        ));
+        let is_dir = metadata.is_dir();
+        let is_file = metadata.is_file();
 
         if is_dir || is_file {
             paths.push(Path {
@@ -74,7 +80,6 @@ mod tests {
     use rand;
     use rand::Rng;
     use read_dir::read_dir;
-    use std::os::unix::fs::symlink;
 
     struct Context {
         dir: String, 
@@ -127,10 +132,12 @@ mod tests {
     #[test]
     fn reads_directory_with_one_symlink() {
         let ctx = before();
-        symlink(format!("{}/{}", &ctx.dir, "nonexistantpath"), format!("{}/{}", &ctx.dir, "symlink")).ok();
+        fs::File::create(format!("{}/{}", &ctx.dir, &ctx.file)).ok();
+        fs::soft_link(format!("{}", &ctx.file), format!("{}/{}", &ctx.dir, "symlink")).ok();
         let mut paths = read_dir(&ctx.dir, "");
 
         assert_eq!(paths.next().unwrap().is_err(), true);
+        assert_eq!(paths.next(), None);
 
         after(ctx);
     }
