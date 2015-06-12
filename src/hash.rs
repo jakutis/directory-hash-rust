@@ -34,25 +34,30 @@ impl ToString for File {
 pub fn hash(dir: &str) -> Result<Vec<File>, String> {
     let mut files: Vec<File> = vec![];
 
-    for relative_path in try!(read_dir::read_dir(dir, "")) {
-        let absolute_path = format!("{}{}", dir, relative_path);
+    for relative_path in read_dir::read_dir(dir, "") {
+        match relative_path {
+            Err(error) => return Err(error),
+            Ok(relative_path) => {
+                let absolute_path = format!("{}{}", dir, relative_path);
 
-        let mut file = try!(fs::File::open(&absolute_path).map_err(|err|
-            format!("error opening file {}: {}", absolute_path, err)
-        ));
-        let mut hasher = hash::Hasher::new(hash::Type::SHA512);
+                let mut file = try!(fs::File::open(&absolute_path).map_err(|err|
+                    format!("error opening file {}: {}", absolute_path, err)
+                ));
+                let mut hasher = hash::Hasher::new(hash::Type::SHA512);
 
-        try!(io::copy(&mut file, &mut hasher).map_err(|err|
-            format!("error hashing file {}: {}", absolute_path, err)
-        ));
+                try!(io::copy(&mut file, &mut hasher).map_err(|err|
+                    format!("error hashing file {}: {}", absolute_path, err)
+                ));
 
-        files.push(File {
-            path: relative_path,
-            hash: hasher.finish()
-                    .iter()
-                    .map(|byte| format!("{:02x}", byte))
-                    .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str)
-        });
+                files.push(File {
+                    path: relative_path,
+                    hash: hasher.finish()
+                            .iter()
+                            .map(|byte| format!("{:02x}", byte))
+                            .fold("".to_string(), |hash_str, byte_str| hash_str + &byte_str)
+                });
+            }
+        }
     }
 
     Ok(files)

@@ -1,20 +1,31 @@
 use std::fs;
 use std::fs::PathExt;
 
-pub fn read_dir(dir: &str, relative_path: &str) -> Result<Vec<String>, String> {
-    let mut output = vec![];
-    let mut queue = try!(read_dir_shallow(dir, relative_path));
+pub struct Paths{dir: String, queue: Vec<Path>}
 
-    while !queue.is_empty() {
-        match queue.pop().unwrap() {
-            Path{is_dir: true, path: directory} =>
-                queue.extend(try!(read_dir_shallow(dir, &directory))),
-            Path{is_dir: false, path: file} =>
-                output.push(file)
+impl Iterator for Paths {
+    type Item = Result<String, String>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.queue.pop() {
+            None => None,
+            Some(Path{is_dir: true, path: directory}) => {
+                match read_dir_shallow(&self.dir, &directory) {
+                    Ok(paths) => {
+                        self.queue.extend(paths);
+                        self.next()
+                    },
+                    Err(error) => Some(Err(error))
+                }
+            },
+            Some(Path{is_dir: false, path: file}) =>
+                Some(Ok(file))
         }
     }
+}
 
-    Ok(output)
+pub fn read_dir(dir: &str, relative_path: &str) -> Paths {
+    Paths{dir: dir.to_string(), queue: vec![Path{is_dir: true, path: relative_path.to_string()}]}
 }
 
 struct Path{is_dir: bool, path: String}
@@ -83,9 +94,9 @@ mod tests {
     fn reads_empty_directory() {
         let ctx = before();
 
-        let paths = read_dir(&ctx.dir, "").unwrap();
+        let mut paths = read_dir(&ctx.dir, "");
 
-        assert_eq!(paths.len(), 0);
+        assert_eq!(paths.next(), None);
 
         after(ctx);
     }
@@ -95,10 +106,10 @@ mod tests {
         let ctx = before();
         fs::File::create(format!("{}/{}", &ctx.dir, &ctx.file)).ok();
 
-        let paths = read_dir(&ctx.dir, "").unwrap();
+        let mut paths = read_dir(&ctx.dir, "");
 
-        assert_eq!(paths.len(), 1);
-        assert_eq!(paths[0], format!("/{}", &ctx.file));
+        assert_eq!(paths.next(), Some(Ok(format!("/{}", &ctx.file))));
+        assert_eq!(paths.next(), None);
 
         after(ctx);
     }
@@ -108,9 +119,9 @@ mod tests {
         let ctx = before();
         fs::create_dir(format!("{}/{}", &ctx.dir, &ctx.subdir)).ok();
 
-        let paths = read_dir(&ctx.dir, "").unwrap();
+        let mut paths = read_dir(&ctx.dir, "");
 
-        assert_eq!(paths.len(), 0);
+        assert_eq!(paths.next(), None);
 
         after(ctx);
     }
@@ -121,10 +132,10 @@ mod tests {
         fs::create_dir(format!("{}/{}", &ctx.dir, &ctx.subdir)).ok();
         fs::File::create(format!("{}/{}/{}", &ctx.dir, &ctx.subdir, &ctx.file)).ok();
 
-        let paths = read_dir(&ctx.dir, "").unwrap();
+        let mut paths = read_dir(&ctx.dir, "");
 
-        assert_eq!(paths.len(), 1);
-        assert_eq!(paths[0], format!("/{}/{}", &ctx.subdir, &ctx.file));
+        assert_eq!(paths.next(), Some(Ok(format!("/{}/{}", &ctx.subdir, &ctx.file))));
+        assert_eq!(paths.next(), None);
 
         after(ctx);
     }
@@ -135,11 +146,11 @@ mod tests {
         fs::File::create(format!("{}/{}", &ctx.dir, &ctx.file)).ok();
         fs::File::create(format!("{}/{}", &ctx.dir, &ctx.file_b)).ok();
 
-        let paths = read_dir(&ctx.dir, "").unwrap();
+        let mut paths = read_dir(&ctx.dir, "");
 
-        assert_eq!(paths.len(), 2);
-        assert_eq!(paths[0], format!("/{}", &ctx.file));
-        assert_eq!(paths[1], format!("/{}", &ctx.file_b));
+        assert_eq!(paths.next(), Some(Ok(format!("/{}", &ctx.file))));
+        assert_eq!(paths.next(), Some(Ok(format!("/{}", &ctx.file_b))));
+        assert_eq!(paths.next(), None);
 
         after(ctx);
     }
