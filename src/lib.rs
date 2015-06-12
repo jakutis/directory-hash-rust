@@ -17,7 +17,7 @@ pub fn hash(dir: &str, sink: &mut io::Write) -> () {
 }
 
 /*
- * TODO mock the hash::hash() and test hash()
+ * TODO test hash(..) by adding an Option<Closure> argument - if None, then hash::hash will be used, if Some(f) - then f will be used
 struct Output {
 buffer: Vec<u8>
 }
