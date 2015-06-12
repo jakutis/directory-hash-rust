@@ -9,10 +9,16 @@ mod read_dir;
 mod hash;
 
 pub fn hash(dir: &str, sink: &mut io::Write) -> () {
-    for file in hash::hash(dir).unwrap() {
-        sink.write_all(file.to_string().as_bytes()).map_err(|err|
-            format!("could not output: {}; err: {}", file.to_string(), err)
-        ).unwrap();
+    let files = read_dir::read_dir(dir, "").map(|relative_path| {
+        match relative_path {
+            Err(err) => panic!(format!("could not hash {}; err: {}", dir.to_string(), err)),
+            Ok(relative_path) => hash::hash(dir, &relative_path)
+        }
+    });
+    for file in files {
+        let file = file.unwrap().to_string();
+
+        sink.write_all(file.as_bytes()).map_err(|err| format!("could not output: {}; err: {}", file, err)).unwrap();
     }
 }
 
