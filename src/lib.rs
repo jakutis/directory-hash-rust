@@ -6,6 +6,7 @@ use std::cmp;
 use std::fmt;
 
 mod read_dir;
+mod read_all;
 mod hash;
 
 fn output(string: String, sink: &mut io::Write) -> () {
@@ -22,6 +23,10 @@ pub fn hash(dir: &str, sink: &mut io::Write) -> () {
     for file in files {
         output(file.unwrap().to_string(), sink);
     }
+}
+
+pub fn import(all_filename: &str, sink: &mut io::Write) -> () {
+    read_all::read_all(all_filename);
 }
 
 pub fn list_errors(dir: &str, sink: &mut io::Write) -> () {
