@@ -2,6 +2,8 @@ extern crate rand;
 extern crate openssl;
 
 use std::io;
+use std::cmp;
+use std::fmt;
 
 mod read_dir;
 mod hash;
@@ -97,3 +99,28 @@ fn rename_if_utf_errors(root: &str, dir: &str, entry: fs::DirEntry) -> Result<()
 }
 */
 
+pub struct File {
+    path: String,
+    hash: String
+}
+
+impl fmt::Debug for File {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.to_string())
+    }
+}
+
+impl cmp::PartialEq for File {
+    fn eq(& self, other: &File) -> bool {
+        self.path == other.path && self.hash == other.hash
+    }
+}
+
+impl ToString for File {
+    fn to_string(&self) -> String {
+        if self.path.contains("\n") {
+            panic!(format!("path {} contains a newline character", self.path));
+        }
+        self.hash.to_string() + " " + &self.path + "\n"
+    }
+}
