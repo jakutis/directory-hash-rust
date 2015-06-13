@@ -4,18 +4,18 @@ use std::env;
 use std::io;
 
 pub fn main() {
-    let path = env::current_dir().ok().unwrap();
-    let filename = path.to_str().unwrap();
     let mut out = io::stdout();
     let info = "Available commands are hash and list_errors.".to_string();
 
     match env::args().nth(1) {
         Some(command) => match command.as_ref() {
-            "hash" => {
-                dirhash::hash(filename, &mut out);
+            "hash" => match env::args().nth(2) {
+                Some(directory) => dirhash::hash(&directory, &mut out),
+                None => println!("Directory unspecified.")
             },
-            "list_errors" => {
-                dirhash::list_errors(filename, &mut out);
+            "list_errors" => match env::args().nth(2) {
+                Some(directory) => dirhash::list_errors(&directory, &mut out),
+                None => println!("Directory unspecified.")
             },
             _ => println!("Unrecognized command {}. {}", command, info)
         },
