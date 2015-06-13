@@ -36,32 +36,6 @@ pub fn list_errors(dir: &str, sink: &mut io::Write) -> () {
 }
 
 /*
- * TODO test hash(..) by adding an Option<Closure> argument - if None, then hash::hash will be used, if Some(f) - then f will be used
-struct Output {
-buffer: Vec<u8>
-}
-
-impl Output {
-fn to_str(& self) -> &str {
-    match str::from_utf8(& self .buffer) {
-        Ok(str) => str,
-        Err(err) => panic!(format!("could not convert a buffer to string; err: {}", err))
-    }
-}
-}
-
-impl io::Write for Output {
-fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-    for b in buf.iter() {
-            self .buffer.push(*b);
-    }
-    Ok(buf.len())
-}
-fn flush(&mut self) -> io::Result<()> { Ok(())}
-}
-*/
-
-/*
 pub fn import(dir: &str, all: &str, path: &str, absolute_path: &str, backup_dir: &str, sink: &mut io::Write) -> () {
 }
 
@@ -98,8 +72,6 @@ fn imports_new_files() {
 
     fs::remove_dir_all(dir).ok();
 }
-
-pub fn list_paths_with_utf8_errors(TODO) -> ()
 
 fn get_lossy(dir: &str, entry: fs::DirEntry) -> Option<String> {
     match entry.path().file_name() {
